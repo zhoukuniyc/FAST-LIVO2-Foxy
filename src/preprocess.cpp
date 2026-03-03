@@ -51,13 +51,13 @@ void Preprocess::set(bool feat_en, int lid_type, double bld, int pfilt_num)
   point_filter_num = pfilt_num;
 }
 
-void Preprocess::process(const livox_ros_driver2::msg::CustomMsg::SharedPtr &msg, PointCloudXYZI::Ptr &pcl_out)
-{
-  avia_handler(msg);
-  *pcl_out = pl_surf;
-}
+// void Preprocess::process(const livox_ros_driver2::msg::CustomMsg::SharedPtr &msg, PointCloudXYZI::Ptr &pcl_out)
+// {
+//   avia_handler(msg);
+//   *pcl_out = pl_surf;
+// }
 
-void Preprocess::process(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg, PointCloudXYZI::Ptr &pcl_out)
+void Preprocess::process(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg, PointCloudXYZI::Ptr &pcl_out)
 {
   switch (lidar_type)
   {
@@ -92,115 +92,115 @@ void Preprocess::process(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &ms
   *pcl_out = pl_surf;
 }
 
-void Preprocess::avia_handler(const livox_ros_driver2::msg::CustomMsg::SharedPtr &msg)
-{
-  pl_surf.clear();
-  pl_corn.clear();
-  pl_full.clear();
-  double t1 = omp_get_wtime();
-  int plsize = msg->point_num;
-  printf("[ Preprocess ] Input point number: %d \n", plsize);
-  // printf("point_filter_num: %d\n", point_filter_num);
+// void Preprocess::avia_handler(const livox_ros_driver2::msg::CustomMsg::SharedPtr &msg)
+// {
+//   pl_surf.clear();
+//   pl_corn.clear();
+//   pl_full.clear();
+//   double t1 = omp_get_wtime();
+//   int plsize = msg->point_num;
+//   printf("[ Preprocess ] Input point number: %d \n", plsize);
+//   // printf("point_filter_num: %d\n", point_filter_num);
 
-  pl_corn.reserve(plsize);
-  pl_surf.reserve(plsize);
-  pl_full.resize(plsize);
+//   pl_corn.reserve(plsize);
+//   pl_surf.reserve(plsize);
+//   pl_full.resize(plsize);
 
-  for (int i = 0; i < N_SCANS; i++)
-  {
-    pl_buff[i].clear();
-    pl_buff[i].reserve(plsize);
-  }
-  uint valid_num = 0;
+//   for (int i = 0; i < N_SCANS; i++)
+//   {
+//     pl_buff[i].clear();
+//     pl_buff[i].reserve(plsize);
+//   }
+//   uint valid_num = 0;
 
-  if (feature_enabled)
-  {
-    for (uint i = 1; i < plsize; i++)
-    {
-      if ((msg->points[i].line < N_SCANS) && ((msg->points[i].tag & 0x30) == 0x10))
-      {
-        pl_full[i].x = msg->points[i].x;
-        pl_full[i].y = msg->points[i].y;
-        pl_full[i].z = msg->points[i].z;
-        pl_full[i].intensity = msg->points[i].reflectivity;
-        pl_full[i].curvature = msg->points[i].offset_time / float(1000000); // use curvature as time of each laser points
+//   if (feature_enabled)
+//   {
+//     for (uint i = 1; i < plsize; i++)
+//     {
+//       if ((msg->points[i].line < N_SCANS) && ((msg->points[i].tag & 0x30) == 0x10))
+//       {
+//         pl_full[i].x = msg->points[i].x;
+//         pl_full[i].y = msg->points[i].y;
+//         pl_full[i].z = msg->points[i].z;
+//         pl_full[i].intensity = msg->points[i].reflectivity;
+//         pl_full[i].curvature = msg->points[i].offset_time / float(1000000); // use curvature as time of each laser points
 
-        bool is_new = false;
-        if ((abs(pl_full[i].x - pl_full[i - 1].x) > 1e-7) || (abs(pl_full[i].y - pl_full[i - 1].y) > 1e-7) ||
-            (abs(pl_full[i].z - pl_full[i - 1].z) > 1e-7))
-        {
-          pl_buff[msg->points[i].line].push_back(pl_full[i]);
-        }
-      }
-    }
-    static int count = 0;
-    static double time = 0.0;
-    count++;
-    double t0 = omp_get_wtime();
-    for (int j = 0; j < N_SCANS; j++)
-    {
-      if (pl_buff[j].size() <= 5) continue;
-      pcl::PointCloud<PointType> &pl = pl_buff[j];
-      plsize = pl.size();
-      vector<orgtype> &types = typess[j];
-      types.clear();
-      types.resize(plsize);
-      plsize--;
-      for (uint i = 0; i < plsize; i++)
-      {
-        types[i].range = pl[i].x * pl[i].x + pl[i].y * pl[i].y;
-        vx = pl[i].x - pl[i + 1].x;
-        vy = pl[i].y - pl[i + 1].y;
-        vz = pl[i].z - pl[i + 1].z;
-        types[i].dista = vx * vx + vy * vy + vz * vz;
-      }
-      types[plsize].range = pl[plsize].x * pl[plsize].x + pl[plsize].y * pl[plsize].y;
-      give_feature(pl, types);
-      // pl_surf += pl;
-    }
-    time += omp_get_wtime() - t0;
-    printf("Feature extraction time: %lf \n", time / count);
-  }
-  else
-  {
-    for (uint i = 0; i < plsize; i++)
-    {
-      if ((msg->points[i].line < N_SCANS)) // && ((msg->points[i].tag & 0x30) == 0x10))
-      {
-        valid_num++;
+//         bool is_new = false;
+//         if ((abs(pl_full[i].x - pl_full[i - 1].x) > 1e-7) || (abs(pl_full[i].y - pl_full[i - 1].y) > 1e-7) ||
+//             (abs(pl_full[i].z - pl_full[i - 1].z) > 1e-7))
+//         {
+//           pl_buff[msg->points[i].line].push_back(pl_full[i]);
+//         }
+//       }
+//     }
+//     static int count = 0;
+//     static double time = 0.0;
+//     count++;
+//     double t0 = omp_get_wtime();
+//     for (int j = 0; j < N_SCANS; j++)
+//     {
+//       if (pl_buff[j].size() <= 5) continue;
+//       pcl::PointCloud<PointType> &pl = pl_buff[j];
+//       plsize = pl.size();
+//       vector<orgtype> &types = typess[j];
+//       types.clear();
+//       types.resize(plsize);
+//       plsize--;
+//       for (uint i = 0; i < plsize; i++)
+//       {
+//         types[i].range = pl[i].x * pl[i].x + pl[i].y * pl[i].y;
+//         vx = pl[i].x - pl[i + 1].x;
+//         vy = pl[i].y - pl[i + 1].y;
+//         vz = pl[i].z - pl[i + 1].z;
+//         types[i].dista = vx * vx + vy * vy + vz * vz;
+//       }
+//       types[plsize].range = pl[plsize].x * pl[plsize].x + pl[plsize].y * pl[plsize].y;
+//       give_feature(pl, types);
+//       // pl_surf += pl;
+//     }
+//     time += omp_get_wtime() - t0;
+//     printf("Feature extraction time: %lf \n", time / count);
+//   }
+//   else
+//   {
+//     for (uint i = 0; i < plsize; i++)
+//     {
+//       if ((msg->points[i].line < N_SCANS)) // && ((msg->points[i].tag & 0x30) == 0x10))
+//       {
+//         valid_num++;
 
-        pl_full[i].x = msg->points[i].x;
-        pl_full[i].y = msg->points[i].y;
-        pl_full[i].z = msg->points[i].z;
-        pl_full[i].intensity = msg->points[i].reflectivity;
-        pl_full[i].curvature = msg->points[i].offset_time / float(1000000); // use curvature as time of each laser points
+//         pl_full[i].x = msg->points[i].x;
+//         pl_full[i].y = msg->points[i].y;
+//         pl_full[i].z = msg->points[i].z;
+//         pl_full[i].intensity = msg->points[i].reflectivity;
+//         pl_full[i].curvature = msg->points[i].offset_time / float(1000000); // use curvature as time of each laser points
 
-        if (i == 0)
-          pl_full[i].curvature = fabs(pl_full[i].curvature) < 1.0 ? pl_full[i].curvature : 0.0;
-        else
-        {
-          // if(fabs(pl_full[i].curvature - pl_full[i - 1].curvature) > 1.0) ROS_ERROR("time jump: %f", fabs(pl_full[i].curvature - pl_full[i - 1].curvature));
-          pl_full[i].curvature = fabs(pl_full[i].curvature - pl_full[i - 1].curvature) < 1.0
-                                     ? pl_full[i].curvature
-                                     : pl_full[i - 1].curvature + 0.004166667f; // float(100/24000)
-        }
+//         if (i == 0)
+//           pl_full[i].curvature = fabs(pl_full[i].curvature) < 1.0 ? pl_full[i].curvature : 0.0;
+//         else
+//         {
+//           // if(fabs(pl_full[i].curvature - pl_full[i - 1].curvature) > 1.0) ROS_ERROR("time jump: %f", fabs(pl_full[i].curvature - pl_full[i - 1].curvature));
+//           pl_full[i].curvature = fabs(pl_full[i].curvature - pl_full[i - 1].curvature) < 1.0
+//                                      ? pl_full[i].curvature
+//                                      : pl_full[i - 1].curvature + 0.004166667f; // float(100/24000)
+//         }
 
-        if (valid_num % point_filter_num == 0)
-        {
-          if (pl_full[i].x * pl_full[i].x + pl_full[i].y * pl_full[i].y + pl_full[i].z * pl_full[i].z >= blind_sqr)
-          {
-            pl_surf.push_back(pl_full[i]);
-            // if (i % 100 == 0 || i == 0) printf("pl_full[i].curvature: %f \n",
-            // pl_full[i].curvature);
-          }
-        }
-      }
-    }
-  }
-  printf("[ Preprocess ] Output point number: %zu \n", pl_surf.points.size());
-}
+//         if (valid_num % point_filter_num == 0)
+//         {
+//           if (pl_full[i].x * pl_full[i].x + pl_full[i].y * pl_full[i].y + pl_full[i].z * pl_full[i].z >= blind_sqr)
+//           {
+//             pl_surf.push_back(pl_full[i]);
+//             // if (i % 100 == 0 || i == 0) printf("pl_full[i].curvature: %f \n",
+//             // pl_full[i].curvature);
+//           }
+//         }
+//       }
+//     }
+//   }
+//   printf("[ Preprocess ] Output point number: %zu \n", pl_surf.points.size());
+// }
 
-void Preprocess::l515_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg)
+void Preprocess::l515_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
   pl_surf.clear();
   pl_corn.clear();
@@ -240,7 +240,7 @@ void Preprocess::l515_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPt
   // pub_func(pl_surf, pub_corn, msg->header.stamp);
 }
 
-void Preprocess::oust64_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg)
+void Preprocess::oust64_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
   pl_surf.clear();
   pl_corn.clear();
@@ -343,7 +343,7 @@ void Preprocess::oust64_handler(const sensor_msgs::msg::PointCloud2::ConstShared
 
 #define MAX_LINE_NUM 64
 
-void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg)
+void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
   pl_surf.clear();
   pl_corn.clear();
@@ -511,7 +511,7 @@ void Preprocess::velodyne_handler(const sensor_msgs::msg::PointCloud2::ConstShar
   // pub_func(pl_surf, pub_corn, msg->header.stamp);
 }
 
-void Preprocess::Pandar128_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg)
+void Preprocess::Pandar128_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
   pl_surf.clear();
 
@@ -563,7 +563,7 @@ void Preprocess::Pandar128_handler(const sensor_msgs::msg::PointCloud2::ConstSha
   // cout << GREEN << "pl_surf.points[31000].timestamp: " << pl_surf.points[31000].curvature << RESET << endl;
 }
 
-void Preprocess::xt32_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg)
+void Preprocess::xt32_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
   pl_surf.clear();
   pl_corn.clear();
@@ -707,7 +707,7 @@ void Preprocess::xt32_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPt
   // pub_func(pl_surf, pub_corn, msg->header.stamp);
 }
 
-void Preprocess::robosense_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg)
+void Preprocess::robosense_handler(const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
 {
   pl_surf.clear();
 
